@@ -1,4 +1,6 @@
 library(tidyverse)
+library(chisq.posthoc.test)
+library(rstatix)
 
 # the data frame from the csv is assigned to the data variable
 data <- read.csv("brfss2021.csv")
@@ -45,11 +47,26 @@ debilitating_mental_health_days <- data %>%
   ) %>%
   frequency_table(POORHLTH)
 
+
+exercise_employment <- data %>%
+  filter(!EXERANY2 %in% c(7, 9),
+         !EMPLOY1 %in% c(9)) %>%
+  mutate(EXERANY2 = ifelse(EXERANY2 == 2, 0, EXERANY2))
+
+# bivariate anlysis
+contingency_table <- table(exercise_employment$EMPLOY1, exercise_employment$EXERANY2)
+chi_result <- chisq.test(contingency_table)
+chi_post_hoc_result <- chisq.posthoc.test(contingency_table, method = "bonferroni")
+cramer_v <- cramer_v(contingency_table)
+
 # dsiplay data :)
 print(did_exercise)
 print(employment_status)
 print(bad_mental_health_days)
 print(debilitating_mental_health_days)
+print(chi_result)
+print(cramer_v)
+print(chi_post_hoc_result)
 
 # Did Exercise
 ggplot(did_exercise, aes(x = factor(EXERANY2, labels = c("No", "Yes")), y = Percentage)) +
@@ -94,3 +111,28 @@ ggplot(debilitating_mental_health_days, aes(x = POORHLTH, y = Percentage)) +
     y = "Percentage (%)"
   ) +
   theme_minimal()
+
+
+exercise_employment %>%
+  filter(!is.na(EMPLOY1), !is.na(EXERANY2)) %>%
+  group_by(EMPLOY1, EXERANY2) %>%
+  summarise(num = n()) %>%
+  group_by(EMPLOY1) %>%
+  mutate(Percentage = num / sum(num) * 100) %>%
+  filter(EXERANY2 == 1) %>%
+  ggplot(aes(x = factor(EMPLOY1, labels = c("Employed for wages", "Self-employed",
+             "not-working > 1 year", "not-working < 1 year",
+             "Homemaker", "Student", "Retired", "Unable to work")),
+             y = Percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), vjust = -0.5) +
+  labs(title = "% Who Exercised in Past 30 Days by Employment Status",
+       x = "Employment Category", y = "% Who Exercised") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# extract residuals from the chi result
+residuals_df <- as.data.frame(chi_result$stdres) %>%
+  rename(EMPLOY1 = Var1, EXERANY2 = Var2, Residual = Freq) %>%
+  filter(EXERANY2 == 1)
+
