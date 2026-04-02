@@ -1,5 +1,3 @@
-# install.packages(c("ggplot2", "tidyr", "dplyr"))
-
 library(ggplot2)
 library(tidyr)
 library(dplyr)
@@ -10,14 +8,13 @@ colors_vec <- c("White","Black","Brown","Pink","Red","Yellow",
 exp1_survivors <- c(0,16,8,0,4,0,24,12,12,24)
 exp2_survivors <- c(12,4,4,16,20,16,4,4,8,12)
 
-# ── Overall chi-square tests ──────────────────
 p1_overall <- chisq.test(exp1_survivors)$p.value
 p2_overall <- chisq.test(exp2_survivors)$p.value
 
 cat(sprintf("Experiment 1 p-value: %.4f\n", p1_overall))
 cat(sprintf("Experiment 2 p-value: %.4f\n\n", p2_overall))
 
-# ── Post hoc console output ───────────────────
+
 posthoc_print <- function(counts, colors, exp_label) {
   n     <- length(counts)
   pairs <- combn(n, 2)
@@ -46,7 +43,6 @@ posthoc_print <- function(counts, colors, exp_label) {
 posthoc_print(exp1_survivors, colors_vec, "Experiment 1")
 posthoc_print(exp2_survivors, colors_vec, "Experiment 2")
 
-# ── Post hoc heatmap ─────────────────────────
 posthoc_heatmap <- function(counts, colors, title_label, filename) {
   n     <- length(counts)
   pairs <- combn(n, 2)
@@ -120,7 +116,6 @@ posthoc_heatmap(exp2_survivors, colors_vec,
                 "Experiment 2 — Post Hoc Pairwise Comparisons",
                 "posthoc_exp2.png")
 
-# ── Bar charts ────────────────────────────────
 trial_colors <- c("Trial 1 Survivors" = "#4472C4",
                   "Trial 2 Survivors" = "#ED7D31",
                   "Trial 3 Survivors" = "#FFC000")
