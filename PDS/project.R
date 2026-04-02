@@ -131,8 +131,6 @@ exercise_employment %>%
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# extract residuals from the chi result
 residuals_df <- as.data.frame(chi_result$stdres) %>%
   rename(EMPLOY1 = Var1, EXERANY2 = Var2, Residual = Freq) %>%
   filter(EXERANY2 == 1)
-
