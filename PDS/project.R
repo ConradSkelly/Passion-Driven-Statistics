@@ -24,6 +24,18 @@ employment_status <- data %>%
   filter(!EMPLOY1 %in% c(9)) %>%
   frequency_table(EMPLOY1)
 
+sex_dist <- model_data %>%
+  filter(!EXERANY2 %in% c(7, 9)) %>%
+  frequency_table(BIRTHSEX)
+
+race_dist <- model_data %>%
+  filter(!EMPLOY1 %in% c(9)) %>%
+  frequency_table(X._RACEGR3)
+
+edu_dist <- model_data %>%
+  filter(!EMPLOY1 %in% c(9)) %>%
+  frequency_table(X._EDUCAG)
+
 # cull unwanted responces variables change dummy code to be better and then make a bin
 bad_mental_health_days <- data %>%
   filter(!MENTHLTH %in% c(77, 99)) %>%
@@ -67,6 +79,45 @@ print(debilitating_mental_health_days)
 print(chi_result)
 print(cramer_v)
 print(chi_post_hoc_result)
+
+# Sex
+ggplot(sex_dist, aes(x = factor(BIRTHSEX, labels = c("Male", "Female")), y = Percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), vjust = -0.5) +
+  labs(
+    title = "Sex Distribution",
+    x = "Sex",
+    y = "Percentage (%)"
+  ) +
+  theme_minimal()
+
+# Race/Ethnicity
+ggplot(race_dist, aes(x = factor(X._RACEGR3, labels = c("White Non-Hispanic", "Black Non-Hispanic",
+                                                          "Other Non-Hispanic", "Multiracial Non-Hispanic",
+                                                          "Hispanic")), y = Percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), vjust = -0.5) +
+  labs(
+    title = "Race / Ethnicity Distribution",
+    x = "Race / Ethnicity",
+    y = "Percentage (%)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Education
+ggplot(edu_dist, aes(x = factor(X._EDUCAG, labels = c("Did not graduate HS", "Graduated HS",
+                                                        "Attended College/Technical",
+                                                        "Graduated College/Technical")), y = Percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), vjust = -0.5) +
+  labs(
+    title = "Education Distribution",
+    x = "Education Level",
+    y = "Percentage (%)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # Did Exercise
 ggplot(did_exercise, aes(x = factor(EXERANY2, labels = c("No", "Yes")), y = Percentage)) +
@@ -134,3 +185,111 @@ exercise_employment %>%
 residuals_df <- as.data.frame(chi_result$stdres) %>%
   rename(EMPLOY1 = Var1, EXERANY2 = Var2, Residual = Freq) %>%
   filter(EXERANY2 == 1)
+
+# <-------------moderating variables------------->
+
+# clean moderating vars
+model_data <- data %>%
+  filter(
+    !EXERANY2    %in% c(7, 9),
+    !EMPLOY1     %in% c(9),
+    !BIRTHSEX    %in% c(7, 9),
+    !X._RACEGR3  %in% c(9),
+    !X._EDUCAG   %in% c(9)
+  ) %>%
+  mutate(EXERANY2 = ifelse(EXERANY2 == 2, 0, EXERANY2))
+
+# custom function to run chi-square + cramer's v within each stratum
+stratified_chisq <- function(data, moderator_var, moderator_labels) {
+  levels <- sort(unique(data[[moderator_var]]))
+  levels <- levels[!is.na(levels)]
+
+  for (i in seq_along(levels)) {
+    cat("\n──", moderator_labels[i], "──\n")
+    subset_data <- data %>% filter(.data[[moderator_var]] == levels[i])
+    ct  <- table(subset_data$EMPLOY1, subset_data$EXERANY2)
+    chi <- chisq.test(ct)
+    cv  <- cramer_v(ct)
+    post_hoc <- chisq.posthoc.test(ct, method = "bonferroni")
+    print(chi)
+    cat("Cramer's V:", cv, "\n")
+    cat("Post-hoc results:\n")
+    print(post_hoc)
+  }
+}
+
+# stratified by biological sex
+cat("\n═══ Stratified by Sex ═══")
+stratified_chisq(
+  model_data, "BIRTHSEX",
+  c("Male", "Female")
+)
+
+# stratified by race / ethnicity
+cat("\n═══ Stratified by Race/Ethnicity ═══")
+stratified_chisq(model_data, "X._RACEGR3", c("White Non-Hispanic", "Black Non-Hispanic",
+                  "Other Non-Hispanic", "Multiracial Non-Hispanic", "Hispanic"))
+
+# stratified by education
+cat("\n═══ Stratified by Education ═══")
+stratified_chisq(model_data, "X._EDUCAG", c("Did not graduate HS", "Graduated HS",
+                  "Attended College/Technical", "Graduated College/Technical"))
+
+employ_labels <- c("Employed\nfor wages", "Self-\nemployed", "Not working\n>1 year",
+                   "Not working\n<1 year", "Homemaker", "Student", "Retired", "Unable\nto work")
+
+# helper to build the plot data
+exercise_by_group <- function(data, moderator_var, moderator_labels) {
+  levels <- sort(unique(data[[moderator_var]]))
+  levels <- levels[!is.na(levels)]
+
+  data %>%
+    filter(!is.na(.data[[moderator_var]]), !is.na(EMPLOY1), !is.na(EXERANY2)) %>%
+    mutate(moderator_label = factor(
+      .data[[moderator_var]],
+      levels = levels,
+      labels = moderator_labels
+    )) %>%
+    group_by(moderator_label, EMPLOY1, EXERANY2) %>%
+    summarise(n = n(), .groups = "drop") %>%
+    group_by(moderator_label, EMPLOY1) %>%
+    mutate(Percentage = n / sum(n) * 100) %>%
+    filter(EXERANY2 == 1)
+}
+
+# biological sex plot
+exercise_by_group(model_data, "BIRTHSEX", c("Male", "Female")) %>%
+  ggplot(aes(x = factor(EMPLOY1, labels = employ_labels), y = Percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), vjust = -0.5, size = 3) +
+  facet_wrap(~moderator_label) +
+  labs(title = "% Who Exercised by Employment Status, Stratified by Sex",
+       x = "Employment Category", y = "% Who Exercised") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# race / ethnicity plot
+exercise_by_group(model_data, "X._RACEGR3",
+                  c("White Non-Hispanic", "Black Non-Hispanic", "Other Non-Hispanic",
+                    "Multiracial Non-Hispanic", "Hispanic")) %>%
+  ggplot(aes(x = factor(EMPLOY1, labels = employ_labels), y = Percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), vjust = -0.5, size = 3) +
+  facet_wrap(~moderator_label) +
+  labs(title = "% Who Exercised by Employment Status, Stratified by Race/Ethnicity",
+       x = "Employment Category", y = "% Who Exercised") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# education plot
+exercise_by_group(model_data, "X._EDUCAG",
+                  c("Did not graduate HS", "Graduated HS",
+                    "Attended College", "Graduated College")) %>%
+  ggplot(aes(x = factor(EMPLOY1, labels = employ_labels), y = Percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), vjust = -0.5, size = 3) +
+  facet_wrap(~moderator_label) +
+  labs(title = "% Who Exercised by Employment Status, Stratified by Education",
+       x = "Employment Category", y = "% Who Exercised") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
